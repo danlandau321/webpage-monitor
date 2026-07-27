@@ -1,0 +1,3 @@
+# Only needed for MONITOR_MODE=selector (HTML/CSS extraction).
+# raw and json modes use the Python standard library alone.
+beautifulsoup4

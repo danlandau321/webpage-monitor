@@ -1,0 +1,56 @@
+name: webpage-monitor
+
+# Runs on a schedule using GitHub's free Actions runners.
+# Cron is in UTC. "0 19 * * *" = 19:00 UTC daily (3:00pm US Eastern during DST).
+# Note: GitHub may delay scheduled runs by a few minutes under load, and it
+# disables schedules after 60 days with no repo activity — a push re-enables it.
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write         # needed so the workflow can commit the updated state file
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run monitor
+        env:
+          # --- what to watch (set these as repo Variables or edit here) ---
+          MONITOR_URL: ${{ vars.MONITOR_URL }}
+          MONITOR_MODE: ${{ vars.MONITOR_MODE }}         # raw | json | selector
+          MONITOR_FIELD: ${{ vars.MONITOR_FIELD }}        # for json mode
+          MONITOR_SELECTOR: ${{ vars.MONITOR_SELECTOR }}  # for selector mode
+          MONITOR_HEADERS: ${{ vars.MONITOR_HEADERS }}    # optional JSON of extra headers
+          MONITOR_LABEL: ${{ vars.MONITOR_LABEL }}
+          ALWAYS_EMAIL: ${{ vars.ALWAYS_EMAIL }}
+          # --- how to email (set these as repo Secrets) ---
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python monitor.py
+
+      - name: Persist state
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update monitor state [skip ci]"
+            git push
+          else
+            echo "No state change to commit."
+          fi
